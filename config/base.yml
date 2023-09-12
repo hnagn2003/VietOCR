@@ -2,7 +2,7 @@
 vocab: 'aAàÀảẢãÃáÁạẠăĂằẰẳẲẵẴắẮặẶâÂầẦẩẨẫẪấẤậẬbBcCdDđĐeEèÈẻẺẽẼéÉẹẸêÊềỀểỂễỄếẾệỆfFgGhHiIìÌỉỈĩĨíÍịỊjJkKlLmMnNoOòÒỏỎõÕóÓọỌôÔồỒổỔỗỖốỐộỘơƠờỜởỞỡỠớỚợỢpPqQrRsStTuUùÙủỦũŨúÚụỤưƯừỪửỬữỮứỨựỰvVwWxXyYỳỲỷỶỹỸýÝỵỴzZ0123456789!"#$%&''()*+,-./:;<=>?@[\]^_`{|}~ '
 
 # cpu, cuda, cuda:0
-device: cuda:0
+device: cpu
 
 seq_modeling: transformer
 transformer:  
@@ -35,17 +35,23 @@ dataset:
     # name of your dataset
     name: data
     # path to annotation and image
-    data_root: ./img/
+    data_root: data/new_train
     train_annotation: annotation_train.txt
     valid_annotation: annotation_val_small.txt
     # resize image to 32 height, larger height will increase accuracy
     image_height: 32
     image_min_width: 32
     image_max_width: 512
+    train_gt_path : data/train_gt.txt
+    train_val_test_split: [0.97, 0.02, 0.01]
+    transform_train : None
+    transform_val : None
+    transform_test : None
 
 dataloader:
     num_workers: 3
     pin_memory: True
+
 
 aug:
     image_aug: true
@@ -56,3 +62,27 @@ predictor:
     beamsearch: False
 
 quiet: False 
+pretrain: https://vocr.vn/data/vietocr/vgg_transformer.pth
+
+# url or local path (predict)
+weights: https://vocr.vn/data/vietocr/vgg_transformer.pth
+
+backbone: vgg19_bn
+cnn:
+    pretrained: True
+    # pooling stride size
+    ss:
+        - [2, 2]
+        - [2, 2]
+        - [2, 1]
+        - [2, 1]
+        - [1, 1]         
+    # pooling kernel size 
+    ks:
+        - [2, 2]
+        - [2, 2]
+        - [2, 1]
+        - [2, 1]
+        - [1, 1]
+    # dim of ouput feature map
+    hidden: 256

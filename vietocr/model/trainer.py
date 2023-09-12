@@ -7,13 +7,16 @@ from vietocr.tool.translate import translate, batch_translate_beam_search
 from vietocr.tool.utils import download_weights
 from vietocr.tool.logger import Logger
 from vietocr.loader.aug import ImgAugTransform
+# from torch.utils.data import DataLoader
 
 import yaml
 import torch
 from vietocr.loader.dataloader_v1 import DataGen
-from vietocr.loader.dataloader import OCRDataset, ClusterRandomSampler, Collator
-from torch.utils.data import DataLoader
-from einops import rearrange
+
+
+from vietocr.loader.dataset import OCRDataset, OCRTransformedDataset,OCRGenDataset,ClusterRandomSampler, Collator
+from torch.utils.data import DataLoader,  Dataset, random_split, ConcatDataset
+# from einops import rearrange
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, OneCycleLR
 
 import torchvision 
@@ -39,6 +42,12 @@ class Trainer():
         self.train_annotation = config['dataset']['train_annotation']
         self.valid_annotation = config['dataset']['valid_annotation']
         self.dataset_name = config['dataset']['name']
+        self.train_gt_path = config['dataset']['train_gt_path']
+
+        self.train_val_test_split = config['dataset']['train_val_test_split']
+        self.transform_train = None #config['dataset']['transform_train']
+        self.transform_val = None #config['dataset']['transform_val']
+        self.transform_test = None #config['dataset']['transform_test']
 
         self.batch_size = config['trainer']['batch_size']
         self.print_every = config['trainer']['print_every']
@@ -51,7 +60,7 @@ class Trainer():
         self.export_weights = config['trainer']['export']
         self.metrics = config['trainer']['metrics']
         logger = config['trainer']['log']
-    
+        self.augment = augmentor
         if logger:
             self.logger = Logger(logger) 
 
@@ -63,23 +72,10 @@ class Trainer():
         
         self.optimizer = AdamW(self.model.parameters(), betas=(0.9, 0.98), eps=1e-09)
         self.scheduler = OneCycleLR(self.optimizer, total_steps=self.num_iters, **config['optimizer'])
-#        self.optimizer = ScheduledOptim(
-#            Adam(self.model.parameters(), betas=(0.9, 0.98), eps=1e-09),
-#            #config['transformer']['d_model'], 
-#            512,
-#            **config['optimizer'])
 
         self.criterion = LabelSmoothingLoss(len(self.vocab), padding_idx=self.vocab.pad, smoothing=0.1)
         
-        transforms = None
-        if self.image_aug:
-            transforms =  augmentor
-
-        self.train_gen = self.data_gen('train_{}'.format(self.dataset_name), 
-                self.data_root, self.train_annotation, self.masked_language_model, transform=transforms)
-        if self.valid_annotation:
-            self.valid_gen = self.data_gen('valid_{}'.format(self.dataset_name), 
-                    self.data_root, self.valid_annotation, masked_language_model=False)
+        self.train_gen, self.valid_gen = self.data_gen(self.data_root, self.train_gt_path)
 
         self.train_losses = []
         
@@ -306,27 +302,42 @@ class Trainer():
 
         return batch
 
-    def data_gen(self, lmdb_path, data_root, annotation, masked_language_model=True, transform=None):
-        dataset = OCRDataset(lmdb_path=lmdb_path, 
-                root_dir=data_root, annotation_path=annotation, 
-                vocab=self.vocab, transform=transform, 
-                image_height=self.config['dataset']['image_height'], 
+    def data_gen(self, data_dir, train_gt_path):
+        data = OCRDataset(data_dir,train_gt_path,image_height=self.config['dataset']['image_height'], 
                 image_min_width=self.config['dataset']['image_min_width'], 
                 image_max_width=self.config['dataset']['image_max_width'])
+        # DataTrans = OCRTransformedDataset(data, self.vocab,transform=transform)
+        data_train, data_val, data_test = random_split(
+                dataset=data,
+                lengths=self.train_val_test_split,
+                generator=torch.Generator().manual_seed(42),
+            )
+        if self.image_aug:
+            data_train = OCRGenDataset(dataset=data_train, augment=self.augment)
+            data_val = OCRGenDataset(dataset=data_val, augment=self.augment)
+        self.data_train = OCRTransformedDataset(dataset=data_train, vocab=self.vocab, transform=self.transform_train)
+        self.data_val = OCRTransformedDataset(dataset=data_val, vocab=self.vocab, transform=self.transform_val)
+        # self.data_test = OCRTransformedDataset(dataset=data_test, vocab=self.vocab, transform=self.hparams.transform_val)
 
-        sampler = ClusterRandomSampler(dataset, self.batch_size, True)
-        collate_fn = Collator(masked_language_model)
+        train_loader =  DataLoader(
+            dataset=self.data_train,
+            batch_size=self.batch_size,
+            shuffle=False,
+            sampler=ClusterRandomSampler(self.data_train, self.batch_size, True),
+            collate_fn=Collator(True),
+            **self.config['dataloader']
+        )
 
-        gen = DataLoader(
-                dataset,
-                batch_size=self.batch_size, 
-                sampler=sampler,
-                collate_fn = collate_fn,
-                shuffle=False,
-                drop_last=False,
-                **self.config['dataloader'])
+        val_loader =  DataLoader(
+            dataset=self.data_val,
+            batch_size=self.batch_size,
+            shuffle=False,
+            sampler=ClusterRandomSampler(self.data_val, self.batch_size, True),
+            collate_fn=Collator(False),
+            **self.config['dataloader']
+        )
        
-        return gen
+        return train_loader, val_loader
 
     def data_gen_v1(self, lmdb_path, data_root, annotation):
         data_gen = DataGen(data_root, annotation, self.vocab, 'cpu', 
@@ -361,3 +372,16 @@ class Trainer():
         loss_item = loss.item()
 
         return loss_item
+from vietocr.tool.config import Cfg
+
+def main():
+    config = Cfg.load_config_from_file("config/base.yml")
+
+    trainer = Trainer(config)
+
+    train_load = trainer.valid_gen
+    data_loader = next(iter(train_load))
+    print(trainer.predict())
+
+if __name__ == '__main__':
+    main()

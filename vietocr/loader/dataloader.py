@@ -19,8 +19,8 @@ from vietocr.tool.translate import process_image
 from vietocr.tool.create_dataset import createDataset
 from vietocr.tool.translate import resize
 
-class OCRDataset(Dataset):
-    def __init__(self, lmdb_path, root_dir, annotation_path, vocab, image_height=32, image_min_width=32, image_max_width=512, transform=None):
+class OCRDataset1(Dataset):
+    def __init__(self, train_gt_path, root_dir, annotation_path, vocab, image_height=32, image_min_width=32, image_max_width=512, transform=None):
         self.root_dir = root_dir
         self.annotation_path = os.path.join(root_dir, annotation_path)
         self.vocab = vocab
@@ -30,13 +30,14 @@ class OCRDataset(Dataset):
         self.image_min_width = image_min_width
         self.image_max_width = image_max_width
 
-        self.lmdb_path =  lmdb_path
+        self.train_gt_path = train_gt_path
+        # self.lmdb_path =  lmdb_path
 
-        if os.path.isdir(self.lmdb_path):
-            print('{} exists. Remove folder if you want to create new dataset'.format(self.lmdb_path))
-            sys.stdout.flush()
-        else:
-            createDataset(self.lmdb_path, root_dir, annotation_path)
+        # if os.path.isdir(self.lmdb_path):
+        #     print('{} exists. Remove folder if you want to create new dataset'.format(self.lmdb_path))
+        #     sys.stdout.flush()
+        # else:
+        #     createDataset(self.lmdb_path, root_dir, annotation_path)
         
         self.env = lmdb.open(
             self.lmdb_path,
@@ -55,11 +56,11 @@ class OCRDataset(Dataset):
     def build_cluster_indices(self):
         self.cluster_indices = defaultdict(list)
 
-        pbar = tqdm(range(self.__len__()), 
-                desc='{} build cluster'.format(self.lmdb_path), 
-                ncols = 100, position=0, leave=True) 
+        # pbar = tqdm(range(self.__len__()), 
+        #         desc='{} build cluster'.format(self.lmdb_path), 
+        #         ncols = 100, position=0, leave=True) 
 
-        for i in pbar:
+        for i in range(self.__len__()):
             bucket = self.get_bucket(i)
             self.cluster_indices[bucket].append(i)
 
@@ -75,40 +76,37 @@ class OCRDataset(Dataset):
 
         return new_w
 
-    def read_buffer(self, idx):
-        img_file = 'image-%09d'%idx
-        label_file = 'label-%09d'%idx
-        path_file = 'path-%09d'%idx
-        
-        imgbuf = self.txn.get(img_file.encode())
-        
-        label = self.txn.get(label_file.encode()).decode()
-        img_path = self.txn.get(path_file.encode()).decode()
 
-        buf = six.BytesIO()
-        buf.write(imgbuf)
-        buf.seek(0)
-    
-        return buf, label, img_path
+    def load_data(self) :
+        # init list
+        samples = []
 
-    def read_data(self, idx):
-        buf, label, img_path = self.read_buffer(idx) 
+        # read file train_gt.txt
+        with open(self.train_gt_path, 'r') as file:
+            for line in file:
+                parts = line.strip().split()
+                if len(parts) == 2:
+                    filename, word = parts
+                    sample_dict = {'filename': filename, 'word': word}
+                    samples.append(sample_dict)
 
-        img = Image.open(buf).convert('RGB')        
-       
-        if self.transform:
-            img = self.transform(img)
+        return samples
 
-        img_bw = process_image(img, self.image_height, self.image_min_width, self.image_max_width)
-            
-        word = self.vocab.encode(label)
-
-        return img_bw, word, img_path
 
     def __getitem__(self, idx):
-        img, word, img_path = self.read_data(idx)
+        # img, word, img_path = self.read_data(idx)
         
-        img_path = os.path.join(self.root_dir, img_path)
+        # img_path = os.path.join(self.root_dir, img_path)
+        sample: dict = self.samples[idx]
+
+        # get sample's information
+        img_path = sample["filename"]
+        word = sample["word"]
+
+        # open & process image
+        image_path = os.path.join(self.data_dir, img_path)
+        image = Image.open(image_path).convert("RGB")
+        img = process_image(image, self.image_height, self.image_min_width, self.image_max_width)
         
         sample = {'img': img, 'word': word, 'img_path': img_path}
 
