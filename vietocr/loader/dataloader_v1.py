@@ -2,8 +2,8 @@ import torch
 import numpy as np
 from PIL import Image
 import random
-from vietocr.model.vocab import Vocab
-from vietocr.tool.translate import process_image
+from VietOCR.vietocr.model.vocab import Vocab
+from VietOCR.vietocr.tool.translate import process_image
 import os
 from collections import defaultdict
 import math

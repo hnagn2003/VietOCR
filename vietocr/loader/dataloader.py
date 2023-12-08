@@ -15,9 +15,9 @@ from tqdm import tqdm
 
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
-from vietocr.tool.translate import process_image
-from vietocr.tool.create_dataset import createDataset
-from vietocr.tool.translate import resize
+from VietOCR.vietocr.tool.translate import process_image
+from VietOCR.vietocr.tool.create_dataset import createDataset
+from VietOCR.vietocr.tool.translate import resize
 
 class OCRDataset1(Dataset):
     def __init__(self, train_gt_path, root_dir, annotation_path, vocab, image_height=32, image_min_width=32, image_max_width=512, transform=None):

@@ -1,32 +1,34 @@
-from vietocr.optim.optim import ScheduledOptim
-from vietocr.optim.labelsmoothingloss import LabelSmoothingLoss
+from VietOCR.vietocr.optim.optim import ScheduledOptim
+from VietOCR.vietocr.optim.labelsmoothingloss import LabelSmoothingLoss
 from torch.optim import Adam, SGD, AdamW
 from torch import nn
-from vietocr.tool.translate import build_model
-from vietocr.tool.translate import translate, batch_translate_beam_search
-from vietocr.tool.utils import download_weights
-from vietocr.tool.logger import Logger
-from vietocr.loader.aug import ImgAugTransform
+from VietOCR.vietocr.tool.translate import build_model
+from VietOCR.vietocr.tool.translate import translate, batch_translate_beam_search
+from VietOCR.vietocr.tool.utils import download_weights
+from VietOCR.vietocr.tool.logger import Logger
+from VietOCR.vietocr.loader.aug import ImgAugTransform
 # from torch.utils.data import DataLoader
 
 import yaml
 import torch
-from vietocr.loader.dataloader_v1 import DataGen
+from VietOCR.vietocr.loader.dataloader_v1 import DataGen
 
 
-from vietocr.loader.dataset import OCRDataset, OCRTransformedDataset,OCRGenDataset,ClusterRandomSampler, Collator
+from VietOCR.vietocr.loader.dataset import OCRDataset, OCRTransformedDataset,OCRGenDataset,ClusterRandomSampler, Collator
 from torch.utils.data import DataLoader,  Dataset, random_split, ConcatDataset
 # from einops import rearrange
 from torch.optim.lr_scheduler import CosineAnnealingLR, CyclicLR, OneCycleLR
 
 import torchvision 
 
-from vietocr.tool.utils import compute_accuracy
+from VietOCR.vietocr.tool.utils import compute_accuracy
 from PIL import Image
 import numpy as np
 import os
 import matplotlib.pyplot as plt
 import time
+import wandb
+wandb.init(project="vietocr", entity="firesdog", mode="offline")
 
 class Trainer():
     def __init__(self, config, pretrained=True, augmentor=ImgAugTransform()):
@@ -39,9 +41,9 @@ class Trainer():
         self.beamsearch = config['predictor']['beamsearch']
 
         self.data_root = config['dataset']['data_root']
-        self.train_annotation = config['dataset']['train_annotation']
-        self.valid_annotation = config['dataset']['valid_annotation']
-        self.dataset_name = config['dataset']['name']
+        # self.train_annotation = config['dataset']['train_annotation']
+        # self.valid_annotation = config['dataset']['valid_annotation']
+        # self.dataset_name = config['dataset']['name']
         self.train_gt_path = config['dataset']['train_gt_path']
 
         self.train_val_test_split = config['dataset']['train_val_test_split']
@@ -85,6 +87,7 @@ class Trainer():
         total_loader_time = 0
         total_gpu_time = 0
         best_acc = 0
+        best_cer = 10
 
         data_iter = iter(self.train_gen)
         for i in range(self.num_iters):
@@ -111,29 +114,40 @@ class Trainer():
                 info = 'iter: {:06d} - train loss: {:.3f} - lr: {:.2e} - load time: {:.2f} - gpu time: {:.2f}'.format(self.iter, 
                         total_loss/self.print_every, self.optimizer.param_groups[0]['lr'], 
                         total_loader_time, total_gpu_time)
-
+                wandb.log({"train/loss": total_loss/self.print_every})
                 total_loss = 0
                 total_loader_time = 0
                 total_gpu_time = 0
                 print(info) 
+                
                 self.logger.log(info)
 
-            if self.valid_annotation and self.iter % self.valid_every == 0:
+            if self.iter % self.valid_every == 0:
                 val_loss = self.validate()
-                acc_full_seq, acc_per_char = self.precision(self.metrics)
+                acc_full_seq, acc_per_char, cer = self.precision(self.metrics)
 
-                info = 'iter: {:06d} - valid loss: {:.3f} - acc full seq: {:.4f} - acc per char: {:.4f}'.format(self.iter, val_loss, acc_full_seq, acc_per_char)
+                info = 'iter: {:06d} - valid loss: {:.3f} - cer: {:.4f} - acc full seq: {:.4f} - acc per char: {:.4f}'.format(self.iter, val_loss, cer, acc_full_seq, acc_per_char)
                 print(info)
+                wandb.log({"val/loss":val_loss ,"acc_per_char":acc_per_char, "acc_full_seq": acc_full_seq, "cer": cer})
+                # wandb.log( )
+                # wandb.log("acc_full_seq", acc_full_seq)
+                # wandb.log("acc_per_char", acc_per_char)
                 self.logger.log(info)
+
 
                 if acc_full_seq > best_acc:
-                    self.save_weights(self.export_weights)
+                    self.save_weights(self.export_weights+'_acc.pth')
+                    # self.save_checkpoint(self.checkpoint+'_acc.pth') ##here
                     best_acc = acc_full_seq
 
-            
+                if cer < best_cer and cer != 0:
+                    self.save_weights(self.export_weights+'_cer.pth')
+                    self.save_checkpoint(self.checkpoint) ##here
+                    best_cer = cer
+
     def validate(self):
         self.model.eval()
-
+        self.save_checkpoint(self.checkpoint)
         total_loss = []
         
         with torch.no_grad():
@@ -188,11 +202,13 @@ class Trainer():
     def precision(self, sample=None):
 
         pred_sents, actual_sents, _, _ = self.predict(sample=sample)
+        # print(pred_sents)
 
         acc_full_seq = compute_accuracy(actual_sents, pred_sents, mode='full_sequence')
         acc_per_char = compute_accuracy(actual_sents, pred_sents, mode='per_char')
-    
-        return acc_full_seq, acc_per_char
+        cer_score = compute_accuracy(actual_sents, pred_sents, mode='cer')
+
+        return acc_full_seq, acc_per_char, cer_score
     
     def visualize_prediction(self, sample=16, errorcase=False, fontname='serif', fontsize=16):
         
@@ -251,9 +267,9 @@ class Trainer():
     def load_checkpoint(self, filename):
         checkpoint = torch.load(filename)
         
-        optim = ScheduledOptim(
-	       Adam(self.model.parameters(), betas=(0.9, 0.98), eps=1e-09),
-            	self.config['transformer']['d_model'], **self.config['optimizer'])
+        # optim = ScheduledOptim(
+	    #    Adam(self.model.parameters(), betas=(0.9, 0.98), eps=1e-09),
+        #     	self.config['transformer']['d_model'], **self.config['optimizer'])
 
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         self.model.load_state_dict(checkpoint['state_dict'])
@@ -372,7 +388,8 @@ class Trainer():
         loss_item = loss.item()
 
         return loss_item
-from vietocr.tool.config import Cfg
+    
+from VietOCR.vietocr.tool.config import Cfg
 
 def main():
     config = Cfg.load_config_from_file("config/base.yml")

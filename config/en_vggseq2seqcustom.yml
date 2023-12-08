@@ -1,0 +1,84 @@
+# change to list chars of your dataset or use default vietnamese chars
+vocab: aAàÀảẢãÃáÁạẠăĂằẰẳẲẵẴắẮặẶâÂầẦẩẨẫẪấẤậẬbBcCdDđĐeEèÈẻẺẽẼéÉẹẸêÊềỀểỂễỄếẾệỆfFgGhHiIìÌỉỈĩĨíÍịỊjJkKlLmMnNoOòÒỏỎõÕóÓọỌôÔồỒổỔỗỖốỐộỘơƠờỜởỞỡỠớỚợỢpPqQrRsStTuUùÙủỦũŨúÚụỤưƯừỪửỬữỮứỨựỰvVwWxXyYỳỲỷỶỹỸýÝỵỴzZ-
+
+# cpu, cuda, cuda
+device: cuda
+
+trainer:
+    batch_size: 32
+    print_every: 200
+    valid_every: 200
+    iters: 500000
+    # where to save our model for prediction
+    export: ./weights/vggseq2seq_custom_dataraw_500k_iter ##CHU Y DOI PATH
+    checkpoint: ./checkpoint/vggseq2seq_custom_dataraw_500k_iter.pth ##CHU Y DOI PATH
+    log: .log/vggseq2seq_custom_dataraw_500k_iter.log ##CHU Y DOI PATH
+    # null to disable compuate accuracy, or change to number of sample to enable validiation while training
+    metrics: null
+
+dataset:    
+    # name of your dataset
+    name: data
+    # path to annotation and image
+    data_root: ./data/new_train
+    # resize image to 32 height, larger height will increase accuracy
+    image_height: 32
+    image_min_width: 32
+    image_max_width: 512
+    train_gt_path : ./data/train_gt.txt
+    train_val_test_split: [0.97, 0.03, 0]
+    transform_train : None
+    transform_val : None
+    transform_test : None
+
+dataloader:
+    num_workers: 48
+    pin_memory: True
+
+
+aug:
+    image_aug: true
+    masked_language_model: true
+
+predictor:
+    # disable or enable beamsearch while prediction, use beamsearch will be slower
+    beamsearch: False
+
+quiet: False 
+
+# for train
+# pretrain: /solution/nnt/BK-Challenge/checkpoint/vggseq2seq_dataraw_300k_iter.pth
+
+# url or local path (for predict)
+weights: ./VietOCR/weights_infer/vggseq2seq_custom_dataraw_500k_iter_cer.pth
+
+backbone: vgg19_bn
+cnn:
+    # pooling stride size
+    ss:
+        - [2, 2]
+        - [2, 2]
+        - [2, 1]
+        - [2, 1]
+        - [1, 1]         
+    # pooling kernel size 
+    ks:
+        - [2, 2]
+        - [2, 2]
+        - [2, 1]
+        - [2, 1]
+        - [1, 1]
+    # dim of ouput feature map
+    hidden: 512
+
+seq_modeling: seq2seq
+transformer:
+    encoder_hidden: 512
+    decoder_hidden: 512
+    img_channel: 512
+    decoder_embedded: 512
+    dropout: 0.1
+
+optimizer:
+    max_lr: 0.001 #0.001
+    pct_start: 0.2

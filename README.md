@@ -9,7 +9,7 @@ Trong project này, mình cài đặt mô hình Transformer OCR nhận dạng ch
 Mô hình VietOCR có tính tổng quát cực tốt, thậm chí có độ chính xác khá cao trên một bộ dataset mới mặc dù mô hình chưa được huấn luyện bao giờ. 
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/pbcquoc/vietocr/master/image/vietocr.jpg" width="512" height="614">
+<img src="https://raw.githubusercontent.com/pbcquoc/vietocr/master/image/VietOCR.vietocr.jpg" width="512" height="614">
 </p>
 
 # Cài Đặt

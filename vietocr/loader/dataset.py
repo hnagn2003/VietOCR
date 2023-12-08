@@ -5,8 +5,8 @@ import os
 from PIL import Image
 from collections import defaultdict
 from tqdm import tqdm
-from vietocr.loader.aug import ImgAugTransform
-from vietocr.model.vocab import Vocab
+from VietOCR.vietocr.loader.aug import ImgAugTransform
+from VietOCR.vietocr.model.vocab import Vocab
 from torch.utils.data.sampler import Sampler
 import random
 import torch
@@ -132,7 +132,7 @@ class OCRTransformedDataset(Dataset):
             ])
         else:
             self.transform = transform
-        # self.build_cluster_indices() ##add here
+        self.build_cluster_indices() ##add here
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -181,7 +181,7 @@ class ClusterRandomSampler(Sampler):
 
     def __iter__(self):
         batch_lists = []
-        self.data_source.build_cluster_indices() ## dict[width] = [idx1, idx2, ...] ##command here
+        # self.data_source.build_cluster_indices() ## dict[width] = [idx1, idx2, ...] ##comment here
         for cluster, cluster_indices in self.data_source.cluster_indices.items():
             if self.shuffle:
                 random.shuffle(cluster_indices)

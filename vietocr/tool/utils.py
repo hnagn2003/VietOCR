@@ -6,6 +6,8 @@ import uuid
 import requests
 import tempfile
 from tqdm import tqdm
+from cer import calculate_cer
+import Levenshtein
 
 def download_weights(uri, cached=None, md5=None, quiet=False):
     if uri.startswith('http'):
@@ -36,6 +38,15 @@ def download_config(id):
     r = requests.get(url)
     config = yaml.safe_load(r.text)
     return config
+    
+def calc(target, predict):
+  cer = 0
+  for i, val in enumerate(target):
+    d = Levenshtein.distance(val, predict[i])
+    d = d / len(target[i])
+    cer += d
+
+  return cer / len(target)
 
 def compute_accuracy(ground_truth, predictions, mode='full_sequence'):
     """
@@ -87,6 +98,17 @@ def compute_accuracy(ground_truth, predictions, mode='full_sequence'):
                 avg_accuracy = 1
             else:
                 avg_accuracy = 0
+    elif mode == 'cer' :
+        try:
+            avg_accuracy = calc(ground_truth, predictions)
+
+        except ZeroDivisionError:
+            print("empty groundtruth")
+            if not predictions:
+                avg_accuracy = 1 
+                print('dont have prediction')
+            else:
+                avg_accuracy = 1
     else:
         raise NotImplementedError('Other accuracy compute mode has not been implemented')
 

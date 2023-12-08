@@ -135,6 +135,9 @@ class ResNet(nn.Module):
 
         return conv
 
-def Resnet50(ss, hidden):
+def Resnet50(ss, hidden): ##maybe change hidden
     return ResNet(3, hidden, BasicBlock, [1, 2, 5, 3])
+
+def Resnet150(ss, hidden):
+    return ResNet(3, hidden, BasicBlock, [2, 8, 36, 3])
 

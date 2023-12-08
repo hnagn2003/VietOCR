@@ -1,0 +1,87 @@
+# change to list chars of your dataset or use default vietnamese chars
+vocab: aAàÀảẢãÃáÁạẠăĂằẰẳẲẵẴắẮặẶâÂầẦẩẨẫẪấẤậẬbBcCdDđĐeEèÈẻẺẽẼéÉẹẸêÊềỀểỂễỄếẾệỆfFgGhHiIìÌỉỈĩĨíÍịỊjJkKlLmMnNoOòÒỏỎõÕóÓọỌôÔồỒổỔỗỖốỐộỘơƠờỜởỞỡỠớỚợỢpPqQrRsStTuUùÙủỦũŨúÚụỤưƯừỪửỬữỮứỨựỰvVwWxXyYỳỲỷỶỹỸýÝỵỴzZ-
+
+# cpu, cuda, cuda
+device: cuda
+
+optimizer:
+    max_lr: 0.0003 #0.0003
+    pct_start: 0.2
+
+trainer:
+    batch_size: 32
+    print_every: 200
+    valid_every: 200
+    iters: 300000
+    # where to save our model for prediction
+    export: ./weights/vgg_transformerocr_data_raw_300k_iter ##CHU Y DOI PATH
+    checkpoint: ./checkpoint/vgg_transformerocr_data_raw_300k_iter.pth ##CHU Y DOI PATH
+    log: ./log/vgg_transformerocr_300k_iter_dataraw.log ##CHU Y DOI PATH
+    # null to disable compuate accuracy, or change to number of sample to enable validiation while training
+    metrics: null
+
+dataset:    
+    # name of your dataset
+    name: data
+    # path to annotation and image
+    data_root: ./data/new_train ##CHU Y DATA PATH
+    # resize image to 32 height, larger height will increase accuracy
+    image_height: 32
+    image_min_width: 32
+    image_max_width: 512
+    train_gt_path : ./data/train_gt.txt
+    train_val_test_split: [0.97, 0.03, 0]
+    transform_train : None
+    transform_val : None
+    transform_test : None
+
+dataloader:
+    num_workers: 48
+    pin_memory: True
+
+
+aug:
+    image_aug: False
+    masked_language_model: True
+
+predictor:
+    # disable or enable beamsearch while prediction, use beamsearch will be slower
+    beamsearch: False
+
+quiet: False 
+# pretrain: weights/transformerocr.pth
+
+# url or local path (predict)
+# weights: https://vocr.vn/data/vietocr/vgg_transformer.pth
+weights: ./VietOCR/weights_infer/vgg_transformerocr_data_raw_300k_iter_cer.pth
+
+seq_modeling: transformer
+transformer:  
+    d_model: 256
+    nhead: 8
+    num_encoder_layers: 12
+    num_decoder_layers: 12
+    dim_feedforward: 2048
+    max_seq_length: 1024
+    pos_dropout: 0.1
+    trans_dropout: 0.1
+
+backbone: vgg19_bn
+cnn:
+    pretrained: True
+    # pooling stride size
+    ss:
+        - [2, 2]
+        - [2, 2]
+        - [2, 1]
+        - [2, 1]
+        - [1, 1]         
+    # pooling kernel size 
+    ks:
+        - [2, 2]
+        - [2, 2]
+        - [2, 1]
+        - [2, 1]
+        - [1, 1]
+    # dim of ouput feature map
+    hidden: 256

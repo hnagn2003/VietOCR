@@ -1,8 +1,8 @@
 import torch
 
 class Beam:
-
-    def __init__(self, beam_size=8, min_length=0, n_top=1, ranker=None,
+    ##beam_size=4
+    def __init__(self, beam_size=4, min_length=0, n_top=1, ranker=None,
                  start_token_id=1, end_token_id=2):
         self.beam_size = beam_size
         self.min_length = min_length

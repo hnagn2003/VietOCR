@@ -1,8 +1,8 @@
 import torch
 from torch import nn
 
-import vietocr.model.backbone.vgg as vgg
-from vietocr.model.backbone.resnet import Resnet50
+import VietOCR.vietocr.model.backbone.vgg as vgg
+from VietOCR.vietocr.model.backbone.resnet import Resnet50, Resnet150
 
 class CNN(nn.Module):
     def __init__(self, backbone, **kwargs):
@@ -14,6 +14,8 @@ class CNN(nn.Module):
             self.model = vgg.vgg19_bn(**kwargs)
         elif backbone == 'resnet50':
             self.model = Resnet50(**kwargs)
+        elif backbone == 'resnet150':
+            self.model = Resnet150(**kwargs)
 
     def forward(self, x):
         return self.model(x)
